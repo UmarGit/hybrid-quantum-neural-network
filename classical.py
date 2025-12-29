@@ -105,7 +105,7 @@ def plot_pca_decision_boundary_classical(
     plt.xlabel("Principal Component 1")
     plt.ylabel("Principal Component 2")
     plt.legend(handles=scatter.legend_elements()[0], labels=target_names)
-    plt.savefig("classical_desision_boundary.png")
+    plt.savefig("classical_decision_boundary.png")
 
 def plot_3d_decision_boundary_classical(model, X_scaled, y, target_names):
     x_min, x_max = X_scaled[:, 0].min() - 0.2, X_scaled[:, 0].max() + 0.2

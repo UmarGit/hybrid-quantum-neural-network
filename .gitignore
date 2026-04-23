@@ -1,0 +1,9 @@
+.idea
+archive
+*__pycache__
+/wandb
+/archive*
+.vscode
+/results*
+!results/
+/NTangled_Datasets

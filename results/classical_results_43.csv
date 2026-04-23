@@ -1,0 +1,9 @@
+timestamp,dataset,model,accuracy,training_time_sec,inference_time_sec,epochs,test_size,learning_rate,hidden_dim,n_chunks,num_qubits,input_dim,num_classes,train_size,test_count,total_params,seed
+2026-04-21T13:28:01.040559,colon,ClassicalMLP,0.642857,0.008377,0.000217,20,0.9,0.1,4,2,,2000,2,6,56,8034,43
+2026-04-21T13:28:01.055137,colon,IterativeClassicalNN,0.732143,0.013375,0.000181,20,0.9,0.1,4,2,,2000,2,6,56,16122,43
+2026-04-21T13:28:01.067740,colon,SplitAttentionClassicalNN,0.625,0.011883,0.000145,20,0.9,0.1,4,2,,2000,2,6,56,8084,43
+2026-04-21T13:28:01.078141,colon,ResNet,0.75,0.009789,0.000168,20,0.9,0.1,4,2,,2000,2,6,56,12037,43
+2026-04-21T13:30:27.199121,leukemia,ClassicalMLP,0.661538,0.011651,0.000323,20,0.9,0.1,4,2,,7129,2,7,65,28550,43
+2026-04-21T13:30:27.216832,leukemia,IterativeClassicalNN,0.661538,0.015926,0.000296,20,0.9,0.1,4,2,,7129,2,7,65,57154,43
+2026-04-21T13:30:27.230414,leukemia,SplitAttentionClassicalNN,0.707692,0.012474,0.000298,20,0.9,0.1,4,2,,7129,2,7,65,28600,43
+2026-04-21T13:30:27.243068,leukemia,ResNet,0.553846,0.011756,0.000339,20,0.9,0.1,4,2,,7129,2,7,65,42811,43

@@ -1,121 +1,166 @@
 # Hybrid Quantum Neural Network Benchmarking
 
-**Research into Accelerating Neural Network training using Quantum Computing**
+Research code for a systematic comparison of classical and hybrid quantum neural architectures across diverse data regimes.
 
-This repository contains the experimental code and benchmarking framework for a Master's research project investigating the geometric capabilities of Hybrid Quantum Neural Networks (HQNN). The study compares Classical MLPs against Qiskit-based QNNs across three tiers of geometric complexity: Linear, Non-Linear, and Topological.
+## Project Status
 
-## 🧪 Project Overview
+Active research project. The repository focuses on reproducible experimental workflows and analysis artifacts rather than production deployment.
 
-The primary goal of this research is to isolate the **"Geometric Advantage"** of Quantum Machine Learning. By benchmarking on specific datasets, we demonstrate that while Quantum Hardware (NISQ) currently suffers from latency (`ibm_torino`), the Quantum Models exhibit **acceleration in convergence** for complex topological problems where classical linear models fail.
+## Why This Repository Exists
 
-**Key Findings:**
-* **Linear Data (Iris):** Classical models are superior in speed; Quantum models are expressive but overkill.
-* **Non-Linear Data (Two Moons):** Quantum Entanglement (`ZZFeatureMap`) enables the model to "bend" decision boundaries, matching classical performance.
-* **Topological Data (Concentric Circles):** **Quantum Advantage.** The QNN successfully learns the closed-loop topology (annulus) via high-dimensional mapping, whereas the shallow Classical MLP fails to converge (stalling at ~60% accuracy).
+The current work is a systematic comparison of parameter-matched classical and hybrid quantum neural architectures across diverse data regimes. The core question is not "is quantum always better", but:
 
-## Repository Structure
+- when hybrid quantum blocks help,
+- when they are neutral,
+- and when classical backbones dominate.
 
-The project is structured into modular python scripts for model definitions and Jupyter notebooks for specific experimental drivers.
+The benchmark is organized around a strict 1-to-1 replacement protocol where both models share the same outer architecture and training setup, and only the core processing block changes.
 
-```text
-.
-├── README.md                          # Project documentation
-├── classical.py                       # PyTorch definitions for Classical MLP baselines
-├── quantum.py                         # Qiskit definitions for Quantum Circuits (Ansatz, FeatureMaps) & Hybrid QNN classes
-├── iris-full-experiment-arch.ipynb    # Experiment 1: Linear Baseline & Hardware Deployment
-├── moons-full-experiment-arch.ipynb   # Experiment 2: Non-Linear Entanglement Test
-└── circle-full-experiment-arch.ipynb  # Experiment 3: Topological Stress Test (The "Smoking Gun" Result)
+The repository includes architecture definitions, controlled experiment drivers, and aggregated multi-seed results for both baseline and extreme-starvation settings.
 
-```
+## Thesis And Preprint
 
-## Installation & Requirements
+- Thesis: [thesis.pdf](thesis.pdf)
+- Preprint (source): [preprint.tex](preprint.tex)
+- Preprint (compiled): [preprint.pdf](preprint.pdf)
 
-This project utilizes **PyTorch** for optimization and **Qiskit** for quantum circuit simulation and hardware execution.
+How these map to the code:
+
+- Experimental implementation: [classical.py](classical.py), [quantum.py](quantum.py), [models](models)
+- Aggregation and reporting pipeline: [collect_tables.py](collect_tables.py), [aggregate_seed_results.py](aggregate_seed_results.py), [plots.py](plots.py)
+- Generated artifacts: [results](results), [results-lk-col](results-lk-col), [plots](plots)
+
+## Repository Layout
+
+- [models](models): Classical and quantum model implementations
+- [classical.py](classical.py): Classical training and evaluation script
+- [quantum.py](quantum.py): Quantum training and evaluation script
+- [collect_tables.py](collect_tables.py): Multi-seed benchmarking runner
+- [aggregate_seed_results.py](aggregate_seed_results.py): Seed summary generation
+- [plots.py](plots.py): Figure generation from benchmark CSV files
+- [iris-full-experiment-arch.ipynb](iris-full-experiment-arch.ipynb), [moons-full-experiment-arch.ipynb](moons-full-experiment-arch.ipynb), [circle-full-experiment-arch.ipynb](circle-full-experiment-arch.ipynb): Notebook experiments
+
+## Quickstart
+
+1. Clone repository.
+2. Create environment and install dependencies.
+3. Run experiments and generate summaries.
+
+Example commands:
 
 ```bash
-pip install qiskit qiskit-machine-learning qiskit-ibm-runtime
-pip install torch torchvision
-pip install scikit-learn matplotlib numpy
+git clone <repo-url>
+cd quantum-neural-network
 
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+python collect_tables.py
+python aggregate_seed_results.py
+python plots.py
 ```
 
-## Usage
+If you use conda, an existing environment can be used in the same way after activation.
 
-### 1. Model Definitions (`quantum.py` & `classical.py`)
+Conda example:
 
-These files contain the core classes imported into the notebooks.
-
-* **`quantum.py`**: Defines the `QuantumMLP` class using `qiskit_machine_learning.connectors.TorchConnector`. It handles the `ZZFeatureMap` (Entanglement) and `EfficientSU2` (Ansatz).
-* **`classical.py`**: Defines the standard `nn.Module` architectures used for baseline comparisons.
-
-### 2. Running Experiments
-
-To reproduce the topological findings, run the notebooks in the following order of complexity:
-
-1. **`iris-full-experiment-arch.ipynb`**:
-* Runs the baseline calibration.
-* Contains the code for deploying to **IBM Quantum Hardware** (`ibm_torino`).
-* *Note: Requires valid IBM Quantum API Token.*
-
-
-2. **`moons-full-experiment-arch.ipynb`**:
-* Demonstrates the "Interference Island" effect where quantum boundaries curve around non-linear data.
-
-
-3. **`circle-full-experiment-arch.ipynb`**:
-* **Main Result:** Demonstrates the QNN forming a closed loop (bullseye) decision boundary, solving the topology that the classical model slices in half.
-
-
-
-## Visual Benchmarks
-
-We compare the decision boundaries of a standard Classical MLP vs. the Hybrid Quantum Neural Network (HQNN) across non-linear and topological datasets.
-
-| Dataset | Classical MLP (Baseline) | Hybrid Quantum NN (Ours) |
-| :---: | :---: | :---: |
-| **Two Moons**<br>*(Non-Linearity)* | <img src="moon/classical_decision_boundary.png" width="400"/> | <img src="moon/quantum_simulator_decision_boundary.png" width="400"/> |
-| **Concentric Circles**<br>*(Topology)* | <img src="circles/classical_decision_boundary.png" width="400"/> | <img src="circles/quantum_simulator_decision_boundary.png" width="400"/> |
-
-**Analysis:**
-
-* **Row 1 (Moons):** Both models solve the problem, but the Quantum model uses entanglement to "bend" the space, creating a smoother decision boundary.
-* **Row 2 (Circles):** This is the **critical result**. The Classical MLP fails to close the loop (creating a linear cut), whereas the HQNN naturally forms a closed topology ("bullseye") due to the periodic nature of the quantum feature map.
-
-### Quantitative Results
-
-Comparing Classical vs. Quantum performance across varying geometric complexities.
-
-| Dataset | Classical MLP (Acc) | Quantum QNN (Acc) | Observation |
-| --- | --- | --- | --- |
-| **Iris** (Linear) | 83.33% | **93.33%** | Quantum is accurate but overkill for simple linear data. |
-| **Moons** (Non-Linear) | **90.42%** | 81.25% | Quantum successfully captures the curvature but struggles with noise. |
-| **Circles** (Topological) | 61.67% (Failed) | **68.00%** | **Quantum Advantage.** Classical model failed to converge (linear cut); Quantum naturally solved the ring topology. |
-
-## Sensitivity Analysis (Iris Dataset)
-
-We conducted controlled experiments to evaluate the impact of circuit depth and feature map frequency on model trainability.
-
-| Configuration | Reps | Accuracy | Analysis |
-| --- | --- | --- | --- |
-| **Baseline** | 2 | **93.33%** | **Optimal.** Balanced expressibility and trainability. |
-| **Shallow** | 1 | 83.33% | **Underfitting.** The circuit lacked sufficient parameters to separate classes. |
-| **Deep** | 3 | 90.00% | **Diminishing Returns.** Increased training time (+42%) with no accuracy gain. |
-| **High-Freq** | 3 | 73.33% | **Optimization Failure.** High-frequency encoding created a chaotic landscape (**Barren Plateau**), preventing gradient convergence. |
-
-
-## Hardware vs. Simulator
-
-The code is configured to run on `Qiskit Aer` (Simulator) by default for speed.
-To run on real hardware (e.g., `ibm_torino` or `ibm_brisbane`), update the `service` definition:
-
-```python
-service = QiskitRuntimeService(
-    channel="ibm_quantum_platform",
-    token="YOUR_TOKEN",
-    instance="YOUR_INSTANCE"
-)
+```bash
+conda activate qnn
+pip install -r requirements.txt
+python collect_tables.py
+python aggregate_seed_results.py
+python plots.py
 ```
 
-## Maintainer
+## Tested Environment
 
-Umar Ahmed - Research Engineer (ITMO) Developed as part of the Hybrid Quantum Architectures Benchmarking Initiative.
+- Python: 3.11
+- OS: macOS
+- Key frameworks: PyTorch, Qiskit, qiskit-machine-learning
+
+## Reproducing Experiments
+
+### Notebook Workflow(Old Code)
+
+Run notebooks in this order:
+
+1. [iris-full-experiment-arch.ipynb](iris-full-experiment-arch.ipynb)
+2. [moons-full-experiment-arch.ipynb](moons-full-experiment-arch.ipynb)
+3. [circle-full-experiment-arch.ipynb](circle-full-experiment-arch.ipynb)
+
+### Script Workflow(New Code)
+
+- Benchmark tables: [collect_tables.py](collect_tables.py)
+- Aggregate seed statistics: [aggregate_seed_results.py](aggregate_seed_results.py)
+- Generate plots: [plots.py](plots.py)
+
+The script pipeline supports two key regimes described in the new preprint:
+
+- baseline multi-seed comparisons (general topologies)
+- 20-seed extreme-starvation sweeps on Leukemia and Colon
+
+Expected outputs:
+
+- Per-seed CSV files in [results](results) or [results-lk-col](results-lk-col)
+- Aggregated summary CSV files with mean and standard deviation per model
+- Figure files in [plots](plots)
+
+## Data Sources
+
+- Iris, Moons, Circles: generated or sourced through scikit-learn workflows.
+- Colon and Leukemia benchmarks: loaded through project dataset utilities and recorded in the result tables.
+- Additional materials are present under [NTangled_Datasets](NTangled_Datasets).
+
+## Hardware Vs Simulator
+
+Default execution is simulator-oriented for reproducibility and speed.
+
+Hardware execution requires an IBM Quantum account and valid runtime credentials. If credentials are unavailable, run in simulator mode.
+
+## Key Results Snapshot
+
+The latest results align with [preprint.tex](preprint.tex):
+
+- No universal quantum advantage across all datasets.
+- Hybrid ResQNet is competitive with parameter-matched classical ResNet.
+- Under extreme starvation, both models converge to a similar accuracy ceiling.
+- A modest variance reduction appears in Leukemia for the hybrid model.
+
+Seed-level benchmark summaries for Leukemia and Colon:
+
+- [results-lk-col/classical_results_seed_summary.csv](results-lk-col/classical_results_seed_summary.csv)
+- [results-lk-col/quantum_results_seed_summary.csv](results-lk-col/quantum_results_seed_summary.csv)
+
+Figures used in the preprint discussion:
+
+- [plots/lk_col_20_seed_boxplot.png](plots/lk_col_20_seed_boxplot.png)
+- [plots/lk_col_parameter_vs_accuracy.png](plots/lk_col_parameter_vs_accuracy.png)
+
+## Troubleshooting
+
+- Import errors:
+    - Reinstall dependencies with requirements file in a clean environment.
+- Qiskit backend/authentication failures:
+    - Use simulator mode first, then configure IBM Quantum credentials.
+- Missing generated artifacts:
+    - Ensure benchmark collection runs before aggregation and plotting.
+- Slow runtime:
+    - Use smaller epoch counts for smoke tests before full runs.
+
+## Contributing
+
+Issues and pull requests are welcome for reproducibility fixes, cleaner experiment abstractions, and additional benchmark scenarios.
+
+## License
+
+This project is licensed under MIT. See [LICENSE](LICENSE).
+
+## Citation
+
+If you use this repository in research, please cite the thesis and/or preprint:
+
+- [thesis.pdf](thesis.pdf)
+- [preprint.tex](preprint.tex)
+- [preprint.pdf](preprint.pdf)
+ 

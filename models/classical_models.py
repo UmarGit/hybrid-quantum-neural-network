@@ -180,3 +180,55 @@ class ResNet(BaseClassicalNN):
         # Combine: Output = Highway + (Gate * Residual)
         return classical_out + (self.residual_gate * residual_out)
 
+
+class CKAResCNet(BaseClassicalNN):
+    """Exact classical 1-1 counterpart of QKAResQNet."""
+
+    def __init__(
+        self,
+        input_dim: int = 30,
+        output_dim: int = 2,
+        hidden_dim: int = 4,
+        residual_gate_init: float = 0.1,
+    ) -> None:
+        super(CKAResCNet, self).__init__()
+
+        self.input_dim: int = input_dim
+        self.output_dim: int = output_dim
+        self.hidden_dim: int = hidden_dim
+
+        # 1. Classical "Highway"
+        self.classical_highway: nn.Linear = nn.Linear(input_dim, output_dim)
+
+        # 2. Trainable Classical Kernel Alignment (CKA) Layer
+        # This mirrors the quantum alignment layer with the same input/output
+        # geometry, but keeps the transformation fully classical.
+        self.cka_alignment: nn.Linear = nn.Linear(input_dim, hidden_dim, bias=False)
+
+        # Initialize alignment weights to identity-like variance to start neutral
+        nn.init.xavier_uniform_(self.cka_alignment.weight)
+
+        # 3. Classical Circuit & Expander
+        self.classical_kernel: nn.Linear = nn.Linear(hidden_dim, hidden_dim)
+        self.expander: nn.Linear = nn.Linear(hidden_dim, output_dim)
+
+        # 4. Dynamic Residual Gate
+        self.quantum_gate: nn.Parameter = nn.Parameter(
+            torch.tensor([residual_gate_init], dtype=torch.float32)
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Path 1: Classical bypass
+        classical_out: torch.Tensor = self.classical_highway(x)
+
+        # Path 2: Classical Kernel Alignment Path
+        aligned_features: torch.Tensor = self.cka_alignment(x)
+
+        # Strict mapping to the Bloch sphere [-pi, pi]
+        c_in: torch.Tensor = torch.tanh(aligned_features) * np.pi
+
+        c_out: torch.Tensor = self.classical_kernel(c_in)
+        residual_out: torch.Tensor = self.expander(c_out)
+
+        # Combine
+        return classical_out + (self.quantum_gate * residual_out)

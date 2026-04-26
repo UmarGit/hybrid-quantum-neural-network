@@ -20,12 +20,14 @@ from models.classical_models import (
     IterativeClassicalNN,
     SplitAttentionClassicalNN,
     ResNet,
+    CKAResCNet,
 )
 from models.quantum_models import (
     ClassicalQuantumMLP,
     IterativeQNN,
     SplitAttentionQNN,
     ResQNet,
+    QKAResQNet,
 )
 from quantum import get_quantum_circuit
 
@@ -122,6 +124,13 @@ def build_classical_model(
             hidden_dim=hidden_dim,
             residual_gate_init=0.1,
         )
+    if model_name == "CKAResCNet":
+        return CKAResCNet(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            hidden_dim=hidden_dim,
+            residual_gate_init=0.1,
+        )
     raise ValueError(f"Unknown classical model: {model_name}")
 
 
@@ -169,6 +178,14 @@ def build_quantum_model(
             num_qubits=num_qubits,
             quantum_gate_limit=0.1,
         )
+    if model_name == "QKAResQNet":
+        return QKAResQNet(
+            qnn=qnn,
+            input_dim=input_dim,
+            output_dim=output_dim,
+            num_qubits=num_qubits,
+            quantum_gate_limit=0.1,
+        )
     raise ValueError(f"Unknown quantum model: {model_name}")
 
 
@@ -200,7 +217,7 @@ def prepare_data(dataset_name: str, test_size: float, seed: int, quiet_logs: boo
 
 def main() -> None:
     # Simple configuration: edit these values directly.
-    datasets = ["colon", "leukemia"]
+    datasets = ["swiss_roll", "breast", "qsar",  "colon", "leukemia", "ntangled"]
     run_classical = True
     run_quantum = True
     quiet_logs = True
@@ -211,19 +228,21 @@ def main() -> None:
     n_chunks = 2
     num_qubits = 4
     out_dir = Path("results")
-    seeds = range(1, 20)
+    seeds = range(1, 5)
 
     classical_models = [
         "ClassicalMLP",
         "IterativeClassicalNN",
         "SplitAttentionClassicalNN",
         "ResNet",
+        "CKAResCNet",
     ]
     quantum_models = [
         "ClassicalQuantumMLP",
         "IterativeQNN",
         "SplitAttentionQNN",
         "ResQNet",
+        "QKAResQNet",
     ]
 
     headers = [

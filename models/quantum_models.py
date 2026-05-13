@@ -139,9 +139,7 @@ class SplitAttentionQNN(BaseQNN[EstimatorQNN]):
 
     def forward(self, x):
         # x shape: [batch, 30]
-        chunks = torch.chunk(
-            x, self.n_chunks, dim=1
-        )  # Split into 3 tensors of [batch, 10]
+        chunks = torch.chunk(x, self.n_chunks, dim=1)  # Split into 3 tensors of [batch, 10]
 
         quantum_outputs = []
         for i, chunk in enumerate(chunks):
@@ -154,9 +152,26 @@ class SplitAttentionQNN(BaseQNN[EstimatorQNN]):
         # Concatenate all quantum insights [batch, 12]
         combined = torch.cat(quantum_outputs, dim=1)
 
-        # (Optional) Attention gating could go here
-        # For now, simple concatenation + linear classification
-        return self.classifier.forward(combined)
+        # --- NEW ATTENTION LOGIC ---
+        # 1. Calculate attention scores for the 3 chunks [batch, 3]
+        attn_logits = self.attention(combined)
+        
+        # 2. Convert to probabilities using Softmax [batch, 3]
+        attn_weights = torch.softmax(attn_logits, dim=1)
+        
+        # 3. Reshape 'combined' so we can apply weights to each chunk
+        # [batch, 12] -> [batch, 3, 4]
+        combined_reshaped = combined.view(-1, self.n_chunks, self.num_qubits)
+        
+        # 4. Expand weights to match the 4 qubits: [batch, 3] -> [batch, 3, 1]
+        # and multiply. Broadcasting will apply the weight to all 4 qubits of that chunk.
+        attended_chunks = combined_reshaped * attn_weights.unsqueeze(-1)
+        
+        # 5. Flatten back to [batch, 12]
+        attended_combined = attended_chunks.view(-1, self.n_chunks * self.num_qubits)
+
+        # Final linear classification on the attention-weighted insights
+        return self.classifier(attended_combined)
 
 
 class ResQNet(BaseQNN[EstimatorQNN]):

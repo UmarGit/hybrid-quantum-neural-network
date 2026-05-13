@@ -7,3 +7,5 @@ archive
 /results*
 !results/
 /NTangled_Datasets
+/data
+/plots-old

@@ -4,10 +4,32 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
+import seaborn as sns
 
 
-RESULTS_DIR = Path("results-lk-col")
+RESULTS_DIR = Path("results-leukemia-colon-new")
 PLOTS_DIR = Path("plots")
+
+plt.style.use("seaborn-v0_8-whitegrid")
+sns.set_theme(
+    context="paper",
+    style="whitegrid",
+    font="DejaVu Sans",
+    font_scale=1.05,
+    rc={
+        "axes.titlesize": 13,
+        "axes.labelsize": 11,
+        "xtick.labelsize": 10,
+        "ytick.labelsize": 10,
+        "legend.fontsize": 10,
+        "figure.dpi": 240,
+    },
+)
+
+CLASSICAL_COLOR = "#B45309"
+QUANTUM_COLOR = "#0E7490"
+EDGE_COLOR = "#111827"
+FIGURE_SIZE = (10, 6)
 
 CLASSICAL_TO_QUANTUM = {
     "ClassicalMLP": "ClassicalQuantumMLP",
@@ -116,8 +138,8 @@ def _build_parameter_table(classical_df: pd.DataFrame, quantum_df: pd.DataFrame)
 
 
 def plot_20_seed_boxplot(seed_df: pd.DataFrame, out_path: Path) -> None:
-    fig, axes = plt.subplots(1, 2, figsize=(11, 5), sharey=True)
-    colors = {"Classical": "#B45309", "Quantum": "#0E7490"}
+    fig, axes = plt.subplots(1, 2, figsize=FIGURE_SIZE, sharey=True)
+    colors = {"Classical": CLASSICAL_COLOR, "Quantum": QUANTUM_COLOR}
 
     for ax, dataset in zip(axes, ["Leukemia", "Colon"]):
         subset = seed_df[seed_df["dataset_label"] == dataset]
@@ -131,19 +153,19 @@ def plot_20_seed_boxplot(seed_df: pd.DataFrame, out_path: Path) -> None:
             patch_artist=True,
             showmeans=True,
             meanline=True,
-            medianprops={"color": "#111827", "linewidth": 1.7},
-            meanprops={"color": "#111827", "linewidth": 1.2, "linestyle": "--"},
+            medianprops={"color": EDGE_COLOR, "linewidth": 1.7},
+            meanprops={"color": EDGE_COLOR, "linewidth": 1.2, "linestyle": "--"},
         )
 
         for patch, label in zip(box["boxes"], ["Classical", "Quantum"]):
             patch.set_facecolor(colors[label])
-            patch.set_alpha(0.55)
-            patch.set_edgecolor("#111827")
+            patch.set_alpha(0.9)
+            patch.set_edgecolor(EDGE_COLOR)
             patch.set_linewidth(1.2)
 
         for key in ["whiskers", "caps"]:
             for line in box[key]:
-                line.set_color("#111827")
+                line.set_color(EDGE_COLOR)
                 line.set_linewidth(1.0)
 
         ax.set_title(f"{dataset} (20 Seed Means)")
@@ -169,7 +191,7 @@ def plot_parameter_vs_accuracy(param_df: pd.DataFrame, out_path: Path) -> None:
         .sort_values("dataset_label")
     )
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig, axes = plt.subplots(1, 2, figsize=FIGURE_SIZE)
     x = range(len(summary))
     width = 0.36
 
@@ -178,16 +200,14 @@ def plot_parameter_vs_accuracy(param_df: pd.DataFrame, out_path: Path) -> None:
         summary["classical_accuracy_pct"],
         width=width,
         label="Classical",
-        color="#B45309",
-        alpha=0.85,
+        color=CLASSICAL_COLOR,
     )
     axes[0].bar(
         [i + width / 2 for i in x],
         summary["quantum_accuracy_pct"],
         width=width,
         label="Quantum",
-        color="#0E7490",
-        alpha=0.85,
+        color=QUANTUM_COLOR,
     )
     axes[0].set_title("Accuracy (Mean Across Architectures)")
     axes[0].set_ylabel("Accuracy (%)")
@@ -200,16 +220,14 @@ def plot_parameter_vs_accuracy(param_df: pd.DataFrame, out_path: Path) -> None:
         summary["classical_total_params"],
         width=width,
         label="Classical Model",
-        color="#9A3412",
-        alpha=0.9,
+        color=CLASSICAL_COLOR,
     )
     axes[1].bar(
         [i + width / 2 for i in x],
         summary["quantum_total_params"],
         width=width,
         label="Quantum Model",
-        color="#155E75",
-        alpha=0.9,
+        color=QUANTUM_COLOR,
     )
 
     # Added label explaining that capacity is equal

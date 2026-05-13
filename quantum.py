@@ -326,7 +326,7 @@ if __name__ == "__main__":
         device = torch.device("cpu")
         print("Using CPU")
 
-    dataset_name = "colon"
+    dataset_name = "leukemia"
     test_size = 0.9
 
     X, y, target_names = load_dataset(dataset_name)
@@ -346,7 +346,7 @@ if __name__ == "__main__":
 
     # --- Circuit Setup ---
     num_qubits = 4
-    n_chunks = 2
+    n_chunks = 10
 
     qnn = get_quantum_circuit(num_qubits=num_qubits)
 
@@ -377,8 +377,8 @@ if __name__ == "__main__":
         quantum_gate_limit=0.1,
     )
 
-    models = [classicalqmlp, iterativeqnn, splitattentionqnn, resqnet]
-    titles = ["Classical", "Iterative", "Split Attention", "ResQnet"]
+    models = [splitattentionqnn]
+    titles = ["Split Attention"]
 
     epochs = 20
 

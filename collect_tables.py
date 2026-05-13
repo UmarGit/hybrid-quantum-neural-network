@@ -217,7 +217,14 @@ def prepare_data(dataset_name: str, test_size: float, seed: int, quiet_logs: boo
 
 def main() -> None:
     # Simple configuration: edit these values directly.
-    datasets = ["swiss_roll", "breast", "qsar",  "colon", "leukemia", "ntangled"]
+    datasets = [
+        # "breast",
+        # "swiss_roll",
+        # "qsar",
+        #  "colon",
+        "leukemia",
+        # "ntangled"
+    ]
     run_classical = True
     run_quantum = True
     quiet_logs = True
@@ -225,24 +232,24 @@ def main() -> None:
     test_size = 0.9
     learning_rate = 0.1
     hidden_dim = 4
-    n_chunks = 2
+    n_chunks = 10
     num_qubits = 4
     out_dir = Path("results")
-    seeds = range(1, 5)
+    seeds = range(0, 21)
 
     classical_models = [
-        "ClassicalMLP",
-        "IterativeClassicalNN",
+        # "ClassicalMLP",
+        # "IterativeClassicalNN",
         "SplitAttentionClassicalNN",
-        "ResNet",
-        "CKAResCNet",
+        # "ResNet",
+        # "CKAResCNet",
     ]
     quantum_models = [
-        "ClassicalQuantumMLP",
-        "IterativeQNN",
+        # "ClassicalQuantumMLP",
+        # "IterativeQNN",
         "SplitAttentionQNN",
-        "ResQNet",
-        "QKAResQNet",
+        # "ResQNet",
+        # "QKAResQNet",
     ]
 
     headers = [
@@ -279,7 +286,7 @@ def main() -> None:
     progress = tqdm(total=total_runs, desc="All runs", dynamic_ncols=True)
 
     for seed_ in seeds:
-        seed = 2**seed_
+        seed = 41 + seed_
         seed_everything(seed)
 
         classical_csv = out_dir / f"classical_results_{seed}.csv"

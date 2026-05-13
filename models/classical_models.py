@@ -125,7 +125,7 @@ class SplitAttentionClassicalNN(BaseClassicalNN):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         chunks: tuple[torch.Tensor, ...] = torch.chunk(x, self.n_chunks, dim=1)
-        classical_outputs: List[torch.Tensor] = []
+        classical_outputs: list[torch.Tensor] = []
 
         for i, chunk in enumerate(chunks):
             # Compress chunk
@@ -134,8 +134,27 @@ class SplitAttentionClassicalNN(BaseClassicalNN):
             c_out: torch.Tensor = self.classical_layers[i](c_in)
             classical_outputs.append(c_out)
 
+        # Concatenate outputs: [batch, hidden_dim * n_chunks]
         combined: torch.Tensor = torch.cat(classical_outputs, dim=1)
-        return self.classifier(combined)
+
+        # --- ATTENTION MECHANISM ---
+        # 1. Calculate attention logits for the chunks: [batch, n_chunks]
+        attn_logits: torch.Tensor = self.attention(combined)
+        
+        # 2. Convert to probabilities using Softmax: [batch, n_chunks]
+        attn_weights: torch.Tensor = torch.softmax(attn_logits, dim=1)
+        
+        # 3. Reshape 'combined' to isolate chunks: [batch, n_chunks, hidden_dim]
+        combined_reshaped: torch.Tensor = combined.view(-1, self.n_chunks, self.hidden_dim)
+        
+        # 4. Expand weights: [batch, n_chunks, 1] and multiply
+        # Broadcasting applies the chunk's weight to its entire hidden representation
+        attended_chunks: torch.Tensor = combined_reshaped * attn_weights.unsqueeze(-1)
+        
+        # 5. Flatten back: [batch, hidden_dim * n_chunks]
+        attended_combined: torch.Tensor = attended_chunks.view(-1, self.n_chunks * self.hidden_dim)
+
+        return self.classifier(attended_combined)
 
 
 class ResNet(BaseClassicalNN):

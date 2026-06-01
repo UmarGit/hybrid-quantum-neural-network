@@ -1,5 +1,6 @@
 import os
 import time
+import copy
 import torch
 import random
 import numpy as np
@@ -15,9 +16,11 @@ from sklearn.preprocessing import MinMaxScaler
 from qiskit import QuantumCircuit, transpile
 from qiskit.circuit.library import ZFeatureMap, RealAmplitudes
 from qiskit.quantum_info import SparsePauliOp
-from qiskit.primitives import BackendEstimatorV2, StatevectorEstimator
+from qiskit.primitives import BackendEstimatorV2
+from qiskit_machine_learning.gradients import ParamShiftEstimatorGradient
 from qiskit_machine_learning.neural_networks import EstimatorQNN
 from qiskit_ibm_runtime import QiskitRuntimeService, EstimatorV2 as RuntimeEstimator
+from qiskit_machine_learning.connectors import TorchConnector
 
 from qiskit_aer import AerSimulator
 from qiskit_aer.noise import NoiseModel, depolarizing_error, ReadoutError
@@ -28,8 +31,54 @@ from models.quantum_models import (
     IterativeQNN,
     SplitAttentionQNN,
     ResQNet,
+    QKAResQNet,
 )
 from models.datasets import load_dataset
+
+
+def plot_model_accuracy(
+    accuracies, losses, epochs, dataset_name, model_name, total_params
+):
+    """
+    Plots the training accuracy and loss over epochs for a given model and saves it.
+    """
+    fig, ax1 = plt.subplots(figsize=(8, 6))
+
+    # Plot Accuracy
+    color = "purple"
+    ax1.set_xlabel("Epochs")
+    ax1.set_ylabel("Accuracy", color=color)
+    ax1.plot(
+        range(1, epochs + 1),
+        accuracies,
+        marker="o",
+        color=color,
+        label="Train Accuracy",
+    )
+    ax1.tick_params(axis="y", labelcolor=color)
+    ax1.grid(True)
+
+    # Plot Loss on secondary axes
+    ax2 = ax1.twinx()
+    color = "tab:red"
+    ax2.set_ylabel("Loss", color=color)
+    ax2.plot(range(1, epochs + 1), losses, marker="s", color=color, label="Train Loss")
+    ax2.tick_params(axis="y", labelcolor=color)
+
+    # Legends setup
+    lines_1, labels_1 = ax1.get_legend_handles_labels()
+    lines_2, labels_2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc="center right")
+
+    plt.title(
+        f"Metrics Plot: {model_name}\nDataset: {dataset_name} | Params: {total_params}"
+    )
+
+    os.makedirs("plots/accuracy", exist_ok=True)
+    filename = f"plots/accuracy/{dataset_name}_{model_name}_{total_params}.png"
+    plt.savefig(filename, bbox_inches="tight")
+    plt.close()
+    print(f"Saved metrics plot to {filename}")
 
 
 # Training
@@ -38,6 +87,7 @@ def train_quantum(
     epochs: int,
     X_train_tensor: torch.FloatTensor,
     y_train_tensor: torch.LongTensor,
+    print_logs=False,
 ):
     start_train = time.time()
 
@@ -45,24 +95,35 @@ def train_quantum(
     optimizer = optim.Adam(model.parameters(), lr=0.1)
 
     losses = []
+    accuracies = []
 
-    # model.train()
     print(f"Training for {epochs} epochs...")
     for epoch in range(epochs):
+        model.train()
         optimizer.zero_grad()
         output = model.forward(X_train_tensor)
         loss = criterion.forward(output, y_train_tensor)
         loss.backward()
         optimizer.step()
 
-        losses.append(loss)
+        losses.append(loss.item())
 
-        # if (epoch + 1) % 2 == 0:
-        #     print(f"Epoch {epoch + 1}/{epochs} | Loss: {loss.item():.4f}")
+        model.eval()
+        with torch.no_grad():
+            eval_output = model.forward(X_train_tensor)
+            _, predictions = torch.max(eval_output, 1)
+            acc = (predictions == y_train_tensor).sum().item() / len(y_train_tensor)
+            accuracies.append(acc)
+
+        if print_logs:
+            if (epoch + 1) % 2 == 0:
+                print(
+                    f"Epoch {epoch + 1}/{epochs} | Loss: {loss.item():.4f} | Acc: {acc:.4f}"
+                )
 
     end_train = time.time()
     training_time = end_train - start_train
-    return model, training_time, losses
+    return model, training_time, losses, accuracies
 
 
 # Inference & Evaluation
@@ -88,8 +149,7 @@ def inference_quantum_simulator(
 
 
 def inference_quantum_hardware(
-    qc: QuantumCircuit,
-    model: BaseQNN,
+    model,  # This should be your trained QKAResQNet instance
     feature_map,
     ansatz,
     observables,
@@ -97,32 +157,39 @@ def inference_quantum_hardware(
     y_test_tensor: torch.LongTensor,
 ):
     try:
-        print("\n--- Connecting to IBM Quantum Hardware ---")
+        print("\n--- Connecting to IBM Quantum Hardware(ibm_quantum_platform) ---")
+        # Correct Service Configuration
         service = QiskitRuntimeService(
             channel="ibm_quantum_platform",
+            token="your-token",  # Replace with your actual key
         )
-        backend = service.least_busy(operational=True, simulator=False)
+
+        backend = service.backend("ibm_kingston")
         print(f"Selected Backend: {backend.name}")
 
-        # 1. Transpile
+        raw_circuit = QuantumCircuit(feature_map.num_qubits)
+        raw_circuit.compose(feature_map, inplace=True)
+        raw_circuit.compose(ansatz, inplace=True)
+
         print("Transpiling circuit...")
-        coupling_map = backend.coupling_map
-        basis_gates = backend.operation_names
         isa_circuit = transpile(
-            qc, coupling_map=coupling_map, basis_gates=basis_gates, optimization_level=1
+            raw_circuit,
+            basis_gates=backend.operation_names,
+            coupling_map=backend.coupling_map,
+            optimization_level=1,
         )
 
-        # 2. Map Observables
+        # Map Observables
         layout = isa_circuit.layout
         mapped_observables = [
             obs.apply_layout(layout, num_qubits=isa_circuit.num_qubits)
             for obs in observables
         ]
 
-        # 3. Hardware Estimator
+        # Hardware Estimator (V2)
         hardware_estimator = RuntimeEstimator(mode=backend)
 
-        # 4. Re-create QNN for Hardware
+        # Re-create QNN for Hardware
         hw_qnn = EstimatorQNN(
             circuit=isa_circuit,
             input_params=feature_map.parameters,
@@ -131,10 +198,16 @@ def inference_quantum_hardware(
             estimator=hardware_estimator,
         )
 
-        hw_model = BaseQNN(hw_qnn)
-        hw_model.load_state_dict(model.state_dict())
+        # Correct PyTorch Model Loading
+        print("Injecting hardware circuit into PyTorch model...")
+        hw_model = copy.deepcopy(model)
+        hw_model.qnn = TorchConnector(hw_qnn)
+        hw_model.eval()
 
-        print("Submitting job to QPU... (This may take a few minutes)")
+        # Execute
+        print(
+            f"Submitting {len(X_test_tensor)} samples to {backend.name}... (This may take a while)"
+        )
         start_inference = time.time()
 
         with torch.no_grad():
@@ -143,6 +216,8 @@ def inference_quantum_hardware(
 
         accuracy = (predictions == y_test_tensor).sum().item() / len(y_test_tensor)
         end_inference = time.time()
+
+        print(f"Hardware Inference Complete. Accuracy: {accuracy * 100:.2f}%")
 
         return accuracy, end_inference - start_inference, predictions
 
@@ -230,9 +305,11 @@ def seed_everything(seed=42):
     print(f"Seeds set to {seed}")
 
 
-P_1QUBIT = 3.316e-4
-P_2QUBIT = 6.20e-3
-P_READOUT = 3.03e-2
+# --- IBM KINGSTON (Heron r2) HARDWARE PROFILE ---
+# Extracted from IBM Quantum Platform (May 25, 2026)
+P_1QUBIT = 2.00e-4  # Estimated 1Q error
+P_2QUBIT = 2.00e-3  # 0.20% Median 2Q Error
+P_READOUT = 1.147e-2  # 1.147% Median Readout Error
 
 
 def create_noisy_backend():
@@ -248,33 +325,28 @@ def create_noisy_backend():
     noise_model.add_all_qubit_quantum_error(error_2, ["cx", "cz", "ecr"])
 
     # B. Readout Errors (Measurement Flip)
-    # Prob of measuring 0 given 1, and 1 given 0
     readout_error = ReadoutError(
         [[1 - P_READOUT, P_READOUT], [P_READOUT, 1 - P_READOUT]]
     )
     noise_model.add_all_qubit_readout_error(readout_error)
 
-    print("* HARDWARE REALITY: IBM Torino Simulation Active")
+    print("* HARDWARE REALITY: IBM Kingston (Heron r2) Simulation Active")
     print(f"   • Gate Noise: 1q={P_1QUBIT:.2%}, 2q={P_2QUBIT:.2%}")
     print(f"   • Readout Noise: {P_READOUT:.2%} (Dominant Factor)")
 
-    num_cores = multiprocessing.cpu_count() - 1
-
     # C. Create the Simulator Backend with the Noise Model baked in
-    # This prevents 'Options' attribute errors by defining it at instantiation
     backend = AerSimulator(
         noise_model=noise_model,
-        method="density_matrix",  # Density matrix is ideal for accurate noise on small # of qubits
-        max_parallel_threads=num_cores,
-        max_parallel_experiments=num_cores,
-        max_parallel_shots=1,
+        method="density_matrix",
+        max_parallel_threads=0,
+        max_parallel_experiments=0,
     )
     return backend
 
 
-def get_quantum_circuit(num_qubits: int = 4):
+def get_quantum_circuit(num_qubits: int = 4, entanglement="linear"):
     feature_map = ZFeatureMap(feature_dimension=num_qubits, reps=2)
-    ansatz = RealAmplitudes(num_qubits=num_qubits, reps=2, entanglement="linear")
+    ansatz = RealAmplitudes(num_qubits=num_qubits, reps=2, entanglement=entanglement)
 
     qc = QuantumCircuit(num_qubits)
     qc.compose(feature_map, inplace=True)
@@ -282,10 +354,6 @@ def get_quantum_circuit(num_qubits: int = 4):
 
     observables = all_z_observables(num_qubits)
 
-    # --- 2. SIMULATOR SETUP (NOISY) ---
-    print("Setting up Noisy Simulator...")
-
-    # --- 2. SIMULATOR SETUP (FIXED) ---
     print("Setting up BackendEstimatorV2...")
     # 1. Create the backend
     torino_backend = create_noisy_backend()
@@ -302,21 +370,26 @@ def get_quantum_circuit(num_qubits: int = 4):
 
     # --- Simulator Run ---
     print("Setting up Simulator...")
-    # estimator = StatevectorEstimator()
+    # Explicitly define the gradient function to avoid auto-generation warning
+    gradient = ParamShiftEstimatorGradient(
+        noisy_estimator, options={"default_shots": 64}
+    )
+
     qnn = EstimatorQNN(
         circuit=qc_transpiled,
         input_params=feature_map.parameters,
         weight_params=ansatz.parameters,
         observables=observables,
         estimator=noisy_estimator,
+        gradient=gradient,
     )
 
-    return qnn
+    return qc, qnn, feature_map, ansatz, observables
 
 
 if __name__ == "__main__":
     # --- Data Prep ---
-    seed_everything(54)
+    seed_everything(42)
 
     # Device setup - Use MPS (Apple Silicon GPU) if available, otherwise CPU
     if torch.backends.mps.is_available():
@@ -326,7 +399,7 @@ if __name__ == "__main__":
         device = torch.device("cpu")
         print("Using CPU")
 
-    dataset_name = "leukemia"
+    dataset_name = "indian_pines_small"
     test_size = 0.9
 
     X, y, target_names = load_dataset(dataset_name)
@@ -346,7 +419,7 @@ if __name__ == "__main__":
 
     # --- Circuit Setup ---
     num_qubits = 4
-    n_chunks = 10
+    n_chunks = 2
 
     qnn = get_quantum_circuit(num_qubits=num_qubits)
 
@@ -359,6 +432,7 @@ if __name__ == "__main__":
     iterativeqnn = IterativeQNN(
         qnn=qnn,
         input_dim=X_train_tensor.shape[1],
+        output_dim=len(target_names),
         num_qubits=num_qubits,
         hidden_dim=8,
         num_iterations=2,
@@ -366,6 +440,7 @@ if __name__ == "__main__":
     splitattentionqnn = SplitAttentionQNN(
         qnn=qnn,
         input_dim=X_train_tensor.shape[1],
+        output_dim=len(target_names),
         num_qubits=num_qubits,
         n_chunks=n_chunks,
     )
@@ -377,8 +452,28 @@ if __name__ == "__main__":
         quantum_gate_limit=0.1,
     )
 
-    models = [splitattentionqnn]
-    titles = ["Split Attention"]
+    qkaresnet = QKAResQNet(
+        qnn=qnn,
+        input_dim=X_train_tensor.shape[1],
+        output_dim=len(target_names),
+        num_qubits=num_qubits,
+        quantum_gate_limit=0.1,
+    )
+
+    models = [
+        classicalqmlp,
+        iterativeqnn,
+        splitattentionqnn,
+        resqnet,
+        qkaresnet,
+    ]
+    titles = [
+        "ClassicalQuantumMLP",
+        "IterativeQNN",
+        "SplitAttentionQNN",
+        "ResQnet",
+        "QKAResQNet",
+    ]
 
     epochs = 20
 
@@ -386,8 +481,8 @@ if __name__ == "__main__":
         # Move model to device
         model = model.to(device)
 
-        trained_model, training_time, losses = train_quantum(
-            model, epochs, X_train_tensor, y_train_tensor
+        trained_model, training_time, losses, accuracies = train_quantum(
+            model, epochs, X_train_tensor, y_train_tensor, print_logs=True
         )
 
         # torch.save(trained_model.state_dict(), "quantum_model.pt")
@@ -399,6 +494,10 @@ if __name__ == "__main__":
         total_params = sum(
             p.numel() for p in trained_model.parameters() if p.requires_grad
         )
+
+        # plot_model_accuracy(
+        #     accuracies, losses, epochs, dataset_name, titles[index], total_params
+        # )
 
         print("-" * 30)
         print(f"       Quantum Simulator MODEL RESULTS: {titles[index]}       ")

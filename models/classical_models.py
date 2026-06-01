@@ -51,6 +51,7 @@ class IterativeClassicalNN(BaseClassicalNN):
     def __init__(
         self,
         input_dim: int = 30,
+        output_dim: int = 2,
         hidden_dim: int = 8,
         intermediate_dim: int = 4,
         num_iterations: int = 2,
@@ -58,6 +59,7 @@ class IterativeClassicalNN(BaseClassicalNN):
         super(IterativeClassicalNN, self).__init__()
 
         self.input_dim: int = input_dim
+        self.output_dim: int = output_dim
         self.hidden_dim: int = hidden_dim
         self.intermediate_dim: int = intermediate_dim
         self.num_iterations: int = num_iterations
@@ -70,7 +72,7 @@ class IterativeClassicalNN(BaseClassicalNN):
         self.classical_layer: nn.Linear = nn.Linear(intermediate_dim, intermediate_dim)
         self.post_layer: nn.Linear = nn.Linear(intermediate_dim, hidden_dim)
 
-        self.final_classify: nn.Linear = nn.Linear(hidden_dim, 2)
+        self.final_classify: nn.Linear = nn.Linear(hidden_dim, output_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         z: torch.Tensor = torch.tanh(self.input_proj(x))
@@ -96,12 +98,14 @@ class SplitAttentionClassicalNN(BaseClassicalNN):
     def __init__(
         self,
         input_dim: int = 30,
+        output_dim: int = 2,
         hidden_dim: int = 4,
         n_chunks: int = 3,
     ) -> None:
         super(SplitAttentionClassicalNN, self).__init__()
 
         self.input_dim: int = input_dim
+        self.output_dim: int = output_dim
         self.hidden_dim: int = hidden_dim
         self.n_chunks: int = n_chunks
         self.chunk_size: int = input_dim // n_chunks
@@ -121,7 +125,7 @@ class SplitAttentionClassicalNN(BaseClassicalNN):
 
         # Attention mechanism
         self.attention: nn.Linear = nn.Linear(hidden_dim * n_chunks, n_chunks)
-        self.classifier: nn.Linear = nn.Linear(hidden_dim * n_chunks, 2)
+        self.classifier: nn.Linear = nn.Linear(hidden_dim * n_chunks, output_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         chunks: tuple[torch.Tensor, ...] = torch.chunk(x, self.n_chunks, dim=1)

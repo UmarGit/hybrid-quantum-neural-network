@@ -3,6 +3,44 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
+
+
+def calculate_est_qpu_time(
+    train_size: int,
+    quantum_params: int = 12,
+    circuit_depth: int = 10,
+    clops: int = 290000,
+) -> float:
+    """
+    Calculate estimated native QPU execution time on IBM Torino (290K CLOPS).
+
+    **CRITICAL: Uses only quantum ansatz parameters, NOT total hybrid network parameters.**
+
+    Reason: The parameter-shift rule for quantum backprop only applies to trainable gates
+    in the quantum circuit (ansatz). Classical PyTorch layers (compressors, classifiers)
+    use standard CPU backpropagation—no additional circuits needed.
+
+    Using parameter-shift rule gradient estimation:
+    - Forward pass: 1 circuit per sample
+    - Backward pass: 2 circuits per parameter per sample (parameter shift rule)
+    - Total circuits per epoch = train_size × (1 + 2 × quantum_params_only)
+    - Total layer operations = circuits × circuit_depth
+    - Execution time = operations / 290,000 CLOPS
+
+    Args:
+        train_size: Number of training samples
+        quantum_params: Trainable parameters in quantum ansatz only (default 12 for RealAmplitudes(4,reps=2))
+        circuit_depth: Average circuit depth in layers (default 10)
+        clops: IBM Torino speed in Circuit Layer Operations Per Second (default 290,000)
+
+    Returns:
+        Estimated execution time in seconds per epoch
+    """
+    circuits = train_size * (1 + 2 * quantum_params)
+    operations = circuits * circuit_depth
+    time_sec = operations / clops
+    return time_sec
 
 
 def load_seed_files(results_dir: Path, prefix: str) -> pd.DataFrame:
@@ -58,7 +96,33 @@ def aggregate_results(df: pd.DataFrame) -> pd.DataFrame:
     agg["accuracy_mean_pct"] = agg["accuracy_mean"] * 100.0
     agg["accuracy_std_pct"] = agg["accuracy_std"] * 100.0
     agg["accuracy_summary"] = agg.apply(
-        lambda row: f"{row['accuracy_mean_pct']:.2f}% +/- {row['accuracy_std_pct']:.1f}%",
+        lambda row: (
+            f"{row['accuracy_mean_pct']:.2f}% +/- {row['accuracy_std_pct']:.1f}%"
+        ),
+        axis=1,
+    )
+
+    # Identify quantum models (classical-only models get NaN for QPU timing)
+    QUANTUM_MODELS = {
+        "ClassicalQuantumMLP",
+        "IterativeQNN",
+        "SplitAttentionQNN",
+        "ResQNet",
+        "QKAResQNet",
+    }
+
+    # Calculate estimated native QPU execution time on IBM Torino
+    agg["est_qpu_time_torino_sec"] = agg.apply(
+        lambda row: (
+            calculate_est_qpu_time(
+                train_size=row["train_size"],
+                quantum_params=12,
+                circuit_depth=10,
+                clops=290000,
+            )
+            if row["model"] in QUANTUM_MODELS
+            else np.nan
+        ),
         axis=1,
     )
 
@@ -75,6 +139,7 @@ def aggregate_results(df: pd.DataFrame) -> pd.DataFrame:
         "training_time_std_sec",
         "inference_time_mean_sec",
         "inference_time_std_sec",
+        "est_qpu_time_torino_sec",
         "epochs",
         "test_size",
         "learning_rate",
@@ -101,7 +166,7 @@ def save_aggregated(results_dir: Path, prefix: str) -> Path:
 
 
 def main() -> None:
-    results_dir = Path("results")
+    results_dir = Path("results-fingertips-resn")
 
     classical_out = save_aggregated(results_dir, "classical")
     quantum_out = save_aggregated(results_dir, "quantum")

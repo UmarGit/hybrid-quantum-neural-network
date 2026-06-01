@@ -1,7 +1,16 @@
 import numpy as np
 import pandas as pd
 
-from sklearn.datasets import make_swiss_roll, load_breast_cancer, fetch_openml
+from sklearn.datasets import (
+    load_wine,
+    make_circles,
+    make_moons,
+    make_swiss_roll,
+    load_breast_cancer,
+    fetch_openml,
+)
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import LabelEncoder
 
 
 def load_dataset(choice="swiss_roll", num_qubits=4):
@@ -11,6 +20,182 @@ def load_dataset(choice="swiss_roll", num_qubits=4):
         X = X[:, [0, 2]]
         target_names = ["Inner Roll", "Outer Roll"]
         print("Dataset: 2D Swiss Roll | Complexity: High Non-Linearity (Toy)")
+
+    elif choice == "circles":
+        # make_circles returns 2D coordinates and binary labels
+        X, y = make_circles(n_samples=500, noise=0.1, factor=0.5, random_state=42)
+        target_names = ["Inner Circle", "Outer Circle"]
+        print("Dataset: 2D Circles | Complexity: Non-Linear")
+
+    elif choice == "moons":
+        # make_moons returns 2D coordinates and binary labels
+        X, y = make_moons(n_samples=500, noise=0.1, random_state=42)
+        target_names = ["Bottom Moon", "Top Moon"]
+        print("Dataset: 2D Moons | Complexity: Non-Linear")
+
+    elif choice == "wine":
+        # make_circles returns 2D coordinates and binary labels
+        wine_data = load_wine()
+        X = wine_data.data
+        y = wine_data.target
+        target_names = wine_data.target_names.tolist()
+        print("Dataset: Wine Quality | Complexity: Non-Linear")
+
+    elif choice == "indian_pines":
+        indian_pines_X_path = "datasets/indian-pines/indianpinearray.npy"
+        indian_pines_y_path = "datasets/indian-pines/IPgt.npy"
+
+        # Load the 3D hyperspectral cube and 2D ground truth labels from local files
+        try:
+            X_cube = np.load(indian_pines_X_path)
+            y_2d = np.load(indian_pines_y_path)
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                f"Could not find {indian_pines_X_path} or {indian_pines_y_path}. Please download them from Kaggle and place them in the working directory."
+            )
+
+        # Indian Pines X is typically (145, 145, 200) and y is (145, 145)
+        # We need to flatten the spatial dimensions to get (n_samples, n_features)
+        n_rows, n_cols, n_bands = X_cube.shape
+        X = X_cube.reshape((n_rows * n_cols, n_bands))
+        y = y_2d.reshape((n_rows * n_cols,))
+
+        # Optional but highly recommended: Remove background pixels (Label 0)
+        # Indian pines has 16 valid classes (1-16), and 0 represents unclassified background
+        valid_pixels = y != 0
+        X = X[valid_pixels]
+        y = y[valid_pixels] - 1  # CrossEntropyLoss expects 0-indexed targets
+
+        # Reduce the hyperspectral bands to a compact 30-dimensional PCA space.
+        X = PCA(n_components=30).fit_transform(X)
+
+        # Generate target names for the 16 distinct classes
+        target_names = [
+            "Alfalfa",
+            "Corn-notill",
+            "Corn-mintill",
+            "Corn",
+            "Grass-pasture",
+            "Grass-trees",
+            "Grass-pasture-mowed",
+            "Hay-windrowed",
+            "Oats",
+            "Soybean-notill",
+            "Soybean-mintill",
+            "Soybean-clean",
+            "Wheat",
+            "Woods",
+            "Buildings-Grass-Trees-Drives",
+            "Stone-Steel-Towers",
+        ]
+
+        print(f"Dataset: Indian Pines | Complexity: High Dimensional ({n_bands} bands)")
+
+    elif choice == "indian_pines_small":
+        indian_pines_X_path = "datasets/indian-pines/indianpinearray.npy"
+        indian_pines_y_path = "datasets/indian-pines/IPgt.npy"
+
+        try:
+            X_cube = np.load(indian_pines_X_path)
+            y_2d = np.load(indian_pines_y_path)
+        except FileNotFoundError:
+            raise FileNotFoundError("Could not find datasets. Please check the path.")
+
+        n_rows, n_cols, n_bands = X_cube.shape
+        X = X_cube.reshape((n_rows * n_cols, n_bands))
+        y = y_2d.reshape((n_rows * n_cols,))
+
+        # Remove background
+        valid_pixels = y != 0
+        X = X[valid_pixels]
+        y = y[valid_pixels] - 1  # 0-indexed
+
+        # STEP 1: Make it Binary. Indian Pines has 16 classes. 
+        binary_mask = (y == 9) | (y == 10)
+        X = X[binary_mask]
+        y = y[binary_mask]
+        
+        # Remap to 0 and 1 for the PyTorch CrossEntropy/BCE Loss
+        y = np.where(y == 9, 0, 1)
+
+        target_names = ["Soybean-notill", "Soybean-mintill"]
+        print(f"Dataset: Indian Pines (Binary Subset) | Samples: {len(X)} | Features: 30 (PCA)")
+
+    elif choice == "fingertips":
+        dataset = "datasets/fingertips/fingertips-dataset.csv"
+
+        df = pd.read_csv(dataset, sep=";")
+
+        df['block'] = (df['state'] != df['state'].shift(1)).cumsum()
+        blocks = df[df['state'] != 'unlabeled'].groupby(['block', 'state']).size().reset_index(name='count')
+        
+        active_cols = [c for c in df.columns if c not in ['time', 'state', 'block'] and '1' not in c]
+        
+        X_list, y_list = [], []
+        for _, row in blocks.iterrows():
+            block_data = df[df['block'] == row['block']][active_cols].values
+            
+            features = np.concatenate([
+                np.mean(block_data, axis=0),
+                np.std(block_data, axis=0),
+                np.min(block_data, axis=0),
+                np.max(block_data, axis=0)
+            ])
+            X_list.append(features)
+            y_list.append(row['state'])
+            
+        X = np.array(X_list)
+        y_raw = np.array(y_list)
+        y = LabelEncoder().fit_transform(np.array(y_list))
+
+        encoder = LabelEncoder()
+        y = encoder.fit_transform(y_raw)
+
+        target_names = encoder.classes_
+
+        print(f"Dataset: Fingertips Accelerometer Data | Samples: {len(X)}")
+
+    elif choice == "brain":
+        brain_counts_path = "datasets/brain/brain_counts.csv"
+        brain_metadata_path = "datasets/brain/brain_metadata.csv"
+
+        try:
+            counts_df = pd.read_csv(brain_counts_path, index_col=0)
+            metadata_df = pd.read_csv(brain_metadata_path)
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                f"Could not find {brain_counts_path} or {brain_metadata_path}. Please place the Tabula Muris brain CSVs in the working directory."
+            )
+
+        if "cell" not in metadata_df.columns or "cell_ontology_class" not in metadata_df.columns:
+            raise ValueError(
+                "brain_metadata.csv must contain 'cell' and 'cell_ontology_class' columns."
+            )
+
+        metadata_df = metadata_df.set_index("cell")
+
+        # Join expression rows with cell-level annotations and keep only matched cells.
+        joined = counts_df.join(metadata_df[["cell_ontology_class"]], how="inner")
+        if joined.empty:
+            raise ValueError("No overlapping cells were found between brain_counts.csv and brain_metadata.csv.")
+
+        label_names = sorted(joined["cell_ontology_class"].dropna().unique().tolist())
+        labels = pd.Categorical(joined.pop("cell_ontology_class"), categories=label_names, ordered=True)
+        y = labels.codes.astype(int)
+        target_names = label_names
+
+        X = joined.to_numpy(dtype=np.float32)
+
+        # # Reduce the gene expression space to a compact PCA representation for downstream models.
+        # n_components = min(30, X.shape[0] - 1, X.shape[1])
+        # if n_components < 2:
+        #     raise ValueError("brain dataset does not have enough samples for PCA reduction.")
+        # X = PCA(n_components=n_components).fit_transform(X)
+
+        print(
+            f"Dataset: Brain RNA-seq | Cells: {X.shape[0]} | PCA Features: {X.shape[1]} | Classes: {len(target_names)}"
+        )
+
 
     elif choice == "breast":
         breast_cancer_data = load_breast_cancer()
@@ -37,14 +222,14 @@ def load_dataset(choice="swiss_roll", num_qubits=4):
         # 2000 Features, only 62 Samples!
         print("Fetching Colon Cancer dataset from OpenML... (may take a moment)")
         colon = fetch_openml(name="colon-cancer", version=1, parser="auto")
-        
-        if hasattr(colon.data, 'toarray'):
+
+        if hasattr(colon.data, "toarray"):
             X = colon.data.toarray().astype(np.float32)
         else:
             X = np.asarray(colon.data, dtype=np.float32)
-        
+
         y = pd.Series(colon.target).astype("category").cat.codes.to_numpy()
-        
+
         target_names = ["Negative", "Positive"]
         print(
             f"Dataset: Colon Cancer Microarray | Features: {X.shape[1]} | Complexity: Extreme Starvation (Genomics)"

@@ -56,6 +56,7 @@ class IterativeQNN(BaseQNN[EstimatorQNN]):
         self,
         qnn: EstimatorQNN,
         input_dim: int = 30,
+        output_dim: int = 2,
         num_qubits: int = 4,
         hidden_dim: int = 8,
         num_iterations: int = 2,
@@ -63,6 +64,7 @@ class IterativeQNN(BaseQNN[EstimatorQNN]):
         super(IterativeQNN, self).__init__()
 
         self.input_dim: int = input_dim
+        self.output_dim: int = output_dim
         self.num_qubits: int = num_qubits
         self.hidden_dim: int = hidden_dim
         self.num_iterations: int = num_iterations
@@ -76,7 +78,7 @@ class IterativeQNN(BaseQNN[EstimatorQNN]):
         self.qnn: EstimatorQNN = TorchConnector(qnn)
         self.post_q = nn.Linear(num_qubits, self.hidden_dim)
 
-        self.final_classify = nn.Linear(self.hidden_dim, 2)
+        self.final_classify = nn.Linear(self.hidden_dim, output_dim)
 
     def forward(self, x):
         # 1. Project to hidden space
@@ -106,6 +108,7 @@ class SplitAttentionQNN(BaseQNN[EstimatorQNN]):
         self,
         qnn: EstimatorQNN,
         input_dim: int = 30,
+        output_dim: int = 2,
         num_qubits: int = 4,
         n_chunks: int = 3,
     ):
@@ -113,6 +116,7 @@ class SplitAttentionQNN(BaseQNN[EstimatorQNN]):
 
         # We split 30 features into 3 chunks of 10
         self.input_dim: int = input_dim
+        self.output_dim: int = output_dim
         self.num_qubits: int = num_qubits
         self.n_chunks: int = n_chunks
         self.chunk_size: int = input_dim // n_chunks
@@ -135,7 +139,7 @@ class SplitAttentionQNN(BaseQNN[EstimatorQNN]):
 
         # Attention Mechanism: Decides which chunk's quantum output matters most
         self.attention = nn.Linear(num_qubits * self.n_chunks, self.n_chunks)
-        self.classifier = nn.Linear(num_qubits * self.n_chunks, 2)
+        self.classifier = nn.Linear(num_qubits * self.n_chunks, output_dim)
 
     def forward(self, x):
         # x shape: [batch, 30]

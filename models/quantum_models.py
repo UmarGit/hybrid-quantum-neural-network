@@ -121,12 +121,6 @@ class SplitAttentionQNN(BaseQNN[EstimatorQNN]):
         self.n_chunks: int = n_chunks
         self.chunk_size: int = input_dim // n_chunks
 
-        # Create 3 independent QNN connectors (sharing the SAME circuit structure/weights or different)
-        # Here we share structure to save memory, but learn distinct weights?
-        # For simplicity in Qiskit TorchConnector, we usually instantiate one QNN
-        # and re-run it, or instantiate 3 separate ones.
-        # Let's use one generic compressor per chunk.
-
         dummy_tensor = torch.empty(1, input_dim)
         dummy_chunks = torch.chunk(dummy_tensor, n_chunks, dim=1)
 
@@ -143,7 +137,9 @@ class SplitAttentionQNN(BaseQNN[EstimatorQNN]):
 
     def forward(self, x):
         # x shape: [batch, 30]
-        chunks = torch.chunk(x, self.n_chunks, dim=1)  # Split into 3 tensors of [batch, 10]
+        chunks = torch.chunk(
+            x, self.n_chunks, dim=1
+        )  # Split into 3 tensors of [batch, 10]
 
         quantum_outputs = []
         for i, chunk in enumerate(chunks):
@@ -156,21 +152,20 @@ class SplitAttentionQNN(BaseQNN[EstimatorQNN]):
         # Concatenate all quantum insights [batch, 12]
         combined = torch.cat(quantum_outputs, dim=1)
 
-        # --- NEW ATTENTION LOGIC ---
         # 1. Calculate attention scores for the 3 chunks [batch, 3]
         attn_logits = self.attention(combined)
-        
+
         # 2. Convert to probabilities using Softmax [batch, 3]
         attn_weights = torch.softmax(attn_logits, dim=1)
-        
+
         # 3. Reshape 'combined' so we can apply weights to each chunk
         # [batch, 12] -> [batch, 3, 4]
         combined_reshaped = combined.view(-1, self.n_chunks, self.num_qubits)
-        
+
         # 4. Expand weights to match the 4 qubits: [batch, 3] -> [batch, 3, 1]
         # and multiply. Broadcasting will apply the weight to all 4 qubits of that chunk.
         attended_chunks = combined_reshaped * attn_weights.unsqueeze(-1)
-        
+
         # 5. Flatten back to [batch, 12]
         attended_combined = attended_chunks.view(-1, self.n_chunks * self.num_qubits)
 
@@ -227,6 +222,7 @@ class QKAResQNet(BaseQNN[EstimatorQNN]):
     Enhanced ResQNet utilizing Quantum Kernel Alignment (QKA).
     The quantum feature map is dynamically aligned to the dataset geometry.
     """
+
     def __init__(
         self,
         qnn: EstimatorQNN,
@@ -245,11 +241,8 @@ class QKAResQNet(BaseQNN[EstimatorQNN]):
         self.classical_highway = nn.Linear(input_dim, output_dim)
 
         # 2. Trainable Quantum Kernel Alignment (QKA) Layer
-        # This replaces the static compressor. It acts as a set of trainable 
-        # parameters (theta) that scale and rotate the classical data BEFORE 
-        # it hits the rigid ZFeatureMap, actively shaping the kernel matrix.
         self.qka_alignment = nn.Linear(input_dim, num_qubits, bias=False)
-        
+
         # Initialize alignment weights to identity-like variance to start neutral
         nn.init.xavier_uniform_(self.qka_alignment.weight)
 
@@ -269,10 +262,10 @@ class QKAResQNet(BaseQNN[EstimatorQNN]):
         # Path 2: Quantum Kernel Alignment Path
         # The QKA layer actively learns the optimal mapping into the Hilbert space
         aligned_features = self.qka_alignment(x)
-        
+
         # Strict mapping to the Bloch sphere [-pi, pi]
-        q_in = torch.tanh(aligned_features) * np.pi 
-        
+        q_in = torch.tanh(aligned_features) * np.pi
+
         q_out = self.qnn(q_in)
         residual_out = self.expander(q_out)
 

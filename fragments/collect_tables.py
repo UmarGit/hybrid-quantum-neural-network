@@ -35,7 +35,7 @@ from models.svm_models import (
     ClassicalSVM,
     QuantumSVM,
 )
-from quantum import get_quantum_circuit
+from fragments.quantum import get_quantum_circuit
 
 
 def seed_everything(seed: int = 42) -> None:
@@ -321,7 +321,7 @@ def prepare_data(dataset_name: str, test_size: float, seed: int, num_qubits: int
 def main() -> None:
     # Simple configuration: edit these values directly.
     datasets = [
-        "fingertips"
+        "gesture"
         # "brain",
         # "indian_pines_small",
         # "circles",
@@ -342,7 +342,7 @@ def main() -> None:
     num_qubits = 2
     hidden_dim = num_qubits
     n_chunks = 2
-    out_dir = Path("results-fingertips-resn")
+    out_dir = Path("results-gesture-resn")
     seeds = range(1, 21)
 
     classical_models = [

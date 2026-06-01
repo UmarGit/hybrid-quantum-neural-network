@@ -9,3 +9,5 @@ archive
 /NTangled_Datasets
 /data
 /plots-old
+/datasets
+.DS_Store

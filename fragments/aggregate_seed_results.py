@@ -166,7 +166,7 @@ def save_aggregated(results_dir: Path, prefix: str) -> Path:
 
 
 def main() -> None:
-    results_dir = Path("results-fingertips-resn")
+    results_dir = Path("results-gesture-resn")
 
     classical_out = save_aggregated(results_dir, "classical")
     quantum_out = save_aggregated(results_dir, "quantum")

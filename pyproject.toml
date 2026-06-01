@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qml-benchmark"
+version = "0.1.0"
+description = "Modular benchmarking package orchestrating the thesis QML models."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy==2.2.4",
+    "pandas==2.2.3",
+    "scikit-learn==1.6.1",
+    "scipy",
+    "torch==2.6.0",
+    "qiskit==1.4.2",
+    "qiskit-aer==0.17.0",
+    "qiskit-machine-learning==0.8.2",
+    "qiskit-ibm-runtime==0.39.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+run-benchmark = "main:main"
+
+[tool.setuptools]
+packages = ["benchmark"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

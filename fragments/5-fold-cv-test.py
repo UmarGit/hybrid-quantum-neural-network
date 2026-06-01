@@ -8,7 +8,7 @@ from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score
 
 # Import your existing architectures
-from quantum import get_quantum_circuit
+from fragments.quantum import get_quantum_circuit
 from models.classical_models import CKAResCNet
 from models.quantum_models import QKAResQNet
 
@@ -76,7 +76,7 @@ def main():
     print("=== ESP32 Accelerometer Gesture Recognition ===")
     print("Loading and Preprocessing Data...")
     X, y, num_classes = load_and_preprocess(
-        "datasets/fingertips/fingertips-dataset.csv"
+        "datasets/gesture/gesture-dataset.csv"
     )
     print(
         f"Data Ready: {X.shape[0]} samples, {X.shape[1]} features, {num_classes} classes.\n"
